@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track Your Bus</title>
+   <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+</head>
+<body>
+    <div class="container">
+        <h1>🗺️ Live Bus Tracker</h1>
+        <div>
+            <input type="text" id="bus-id-input" placeholder="Enter Bus ID (e.g., BUS-01)">
+            <button id="track-btn">Track Bus</button>
+        </div>
+        <div id="info">Enter a Bus ID to begin.</div>
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <script>
+        const trackBtn = document.getElementById('track-btn');
+        const busIdInput = document.getElementById('bus-id-input');
+        const infoDiv = document.getElementById('info');
+        const SERVER_URL = 'http://localhost:3000';
+
+        // Initialize map centered on Lonavala
+        const map = L.map('map').setView([18.7554, 73.4093], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        let busMarker = null;
+        let trackingInterval = null;
+
+        trackBtn.addEventListener('click', () => {
+            const busId = busIdInput.value.trim();
+            if (!busId) {
+                infoDiv.innerText = 'Please enter a Bus ID.';
+                return;
+            }
+            // Clear previous tracking
+            if (trackingInterval) {
+                clearInterval(trackingInterval);
+            }
+            infoDiv.innerText = `Searching for ${busId}...`;
+            trackBus(busId); // First immediate call
+            trackingInterval = setInterval(() => trackBus(busId), 10000); // Then every 10 seconds
+        });
+
+        async function trackBus(busId) {
+            try {
+                const response = await fetch(`${SERVER_URL}/api/bus/location/${busId}`);
+                if (!response.ok) {
+                    infoDiv.innerText = `Could not find Bus ${busId}. Is it online?`;
+                    return;
+                }
+                const data = await response.json();
+                const [lng, lat] = data.location.coordinates;
+                infoDiv.innerText = `Tracking ${busId}. Last updated: ${new Date(data.lastUpdated).toLocaleTimeString()}`;
+
+                if (busMarker) {
+                    busMarker.setLatLng([lat, lng]);
+                } else {
+                    // Custom bus icon (optional)
+                    const busIcon = L.icon({ iconUrl: 'https://img.icons8.com/color/48/000000/bus.png', iconSize: [38, 38] });
+                    busMarker = L.marker([lat, lng], { icon: busIcon }).addTo(map);
+                }
+                map.setView([lat, lng], 16); // Center map on the bus
+            } catch (error) {
+                console.error("Error fetching bus location:", error);
+            }
+        }
+    </script>
+</body>
+</html>

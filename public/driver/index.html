@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver - Bus Tracker</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🚍 Driver Panel</h1>
+        <div id="qr-reader" style="width:100%;"></div>
+        <button id="scan-btn">Scan Bus QR Code</button>
+        <div id="status">Waiting for scan...</div>
+    </div>
+
+    <script src="https://unpkg.com/html5-qrcode/html5-qrcode.min.js"></script>
+
+    <script>
+        const scanBtn = document.getElementById('scan-btn');
+        const statusDiv = document.getElementById('status');
+        let busId = null;
+        let locationInterval = null;
+        const SERVER_URL = 'http://localhost:3000';
+
+        function onScanSuccess(decodedText, decodedResult) {
+            busId = decodedText;
+            statusDiv.innerText = `✅ Scanned Bus ID: ${busId}. Starting GPS...`;
+            html5QrcodeScanner.clear(); // Stop scanning
+            document.getElementById('qr-reader').style.display = 'none';
+            scanBtn.style.display = 'none';
+            startTracking();
+        }
+
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+            "qr-reader", { fps: 10, qrbox: 250 }, false);
+
+        scanBtn.addEventListener('click', () => {
+            html5QrcodeScanner.render(onScanSuccess);
+            scanBtn.style.display = 'none';
+        });
+
+        function startTracking() {
+            if (!navigator.geolocation) {
+                statusDiv.innerText = '❌ Geolocation is not supported by your browser.';
+                return;
+            }
+
+            // Get initial position and then start watching
+            navigator.geolocation.getCurrentPosition(sendPosition, showError, { enableHighAccuracy: true });
+
+            locationInterval = setInterval(() => {
+                navigator.geolocation.getCurrentPosition(sendPosition, showError, { enableHighAccuracy: true });
+            }, 15000); // Send location every 15 seconds
+        }
+
+        function sendPosition(position) {
+            const { latitude, longitude } = position.coords;
+            statusDiv.innerHTML = `Tracking Bus ${busId}<br>Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`;
+
+            fetch(`${SERVER_URL}/api/bus/update-location`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ busId, latitude, longitude })
+            }).catch(err => {
+                statusDiv.innerText = 'Error sending location. Retrying...';
+            });
+        }
+
+        function showError(error) {
+            statusDiv.innerText = `GPS Error: ${error.message}`;
+        }
+    </script>
+</body>
+</html>
